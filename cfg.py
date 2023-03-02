@@ -1,10 +1,15 @@
 from collections import defaultdict
 
 
+# just a wrapper class for a list of strings
+# for a production rule 'A -> a A', self.items should be ['a', 'A']
+# lambda is stored as an empty string
 class Rule:
     def __init__(self, items):
         self.items = items
 
+    # if items is ['a', 'A'], this returns 'a A'
+    # [''] returns 'lambda'
     def __str__(self):
         output = ''
         for item in self.items:
@@ -15,7 +20,20 @@ class Rule:
 
 
 class CFG:
+    # pass in path to grammar definition file
     def __init__(self, grammar_file):
+        """
+        for this grammar:
+        S -> A $
+        A -> a | lambda
+
+        rules would be:
+        {
+            S: [Rule(['A', '$']]
+            A: [Rule(['a']), Rule([''])
+        }
+        where the list inside Rule() is that Rule's items
+        """
         self.rules = defaultdict(lambda: [])
         with open(grammar_file, 'r') as grammar:
             lines = [line.strip() for line in grammar.read().split('\n') if line.strip() != '']
@@ -35,9 +53,11 @@ class CFG:
                     self.rules[non_terminal].append(Rule(rule.split(' ')))
                 i += 1
 
+    # returns a list of the non-terminals
     def get_non_terminals(self):
         return list(self.rules.keys())
 
+    # returns a list of the terminals and non-terminals (and $)
     def get_grammar_symbols(self):
         symbols = set(self.get_non_terminals())
         for rule_set in self.rules.values():
@@ -48,6 +68,10 @@ class CFG:
 
         return list(symbols)
 
+    # if self.rules is { S -> [Rule(['a', '$']), Rule([''])] }
+    # this returns
+    # (1)    S -> a $
+    # (2)    S -> lambda
     def get_rules_string(self):
         output = ''
         i = 1
@@ -59,6 +83,7 @@ class CFG:
         return output
 
 
+# print things in the example format from lga-cfg-code
 if __name__ == '__main__':
     cfg = CFG('test.cfg')
     print('Grammar Non-Terminals')
