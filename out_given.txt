@@ -1,0 +1,31 @@
+Grammar Non-Terminals
+S, A, B, C, E, F
+Grammar Symbols
+w, t, m, n, o, p, z, s, S, A, B, C, E, F, $
+
+(1)    S -> A B C $
+(2)    A -> w A C A t
+(3)    A -> F
+(4)    A -> lambda
+(5)    B -> m n o p
+(6)    C -> B A z
+(7)    C -> A B C
+(8)    E -> s
+(9)    E -> t
+(10)    F -> z E
+(11)    F -> lambda
+
+
+Grammar Start Symbol or Goal: S
+False
+False
+
+First set tests:
+(set(), {'i'})
+({'w', 'z', 'm'}, {'S'})
+({'m', 'w', 'z'}, {'C'})
+Follow set tests:
+(set(), {'S'})
+({'$', 'w', 'z', 't'}, {'C'})
+(set(), {'D'})
+({'m', 'w', 'z', 't'}, {'E'})
