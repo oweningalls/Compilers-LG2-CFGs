@@ -35,6 +35,7 @@ class CFG:
         where the list inside Rule() is that Rule's items
         """
         self.rules = defaultdict(lambda: [])
+        self.alphabet = set()
         with open(grammar_file, 'r') as grammar:
             lines = [line.strip() for line in grammar.read().split('\n') if line.strip() != '']
             i = 0
@@ -50,8 +51,18 @@ class CFG:
                         self.start_symbol = non_terminal
                     elif rule == 'lambda':
                         rule = ''
-                    self.rules[non_terminal].append(Rule(rule.split(' ')))
+                    rhs = rule.split(' ')
+                    self.alphabet.update(rhs)
+                    self.rules[non_terminal].append(Rule(rhs))
                 i += 1
+
+        for non_terminal in self.rules.keys():
+            if non_terminal in self.alphabet:
+                self.alphabet.remove(non_terminal)
+        if '' in self.alphabet:
+            self.alphabet.remove('')
+        if '$' in self.alphabet:
+            self.alphabet.remove('$')
 
     # returns a list of the non-terminals
     def get_non_terminals(self):
@@ -59,13 +70,8 @@ class CFG:
 
     # returns a list of the terminals and non-terminals (and $)
     def get_grammar_symbols(self):
-        symbols = set(self.get_non_terminals())
-        for rule_set in self.rules.values():
-            for rule in rule_set:
-                symbols.update(rule.items)
-        if '' in symbols:
-            symbols.remove('')
-
+        symbols = self.alphabet.union(self.rules.keys())
+        symbols.add('$')
         return list(symbols)
 
     # if self.rules is { S -> [Rule(['a', '$']), Rule([''])] }
@@ -82,6 +88,30 @@ class CFG:
 
         return output
 
+    # pass in the name of a non_terminal
+    # don't pass anything for checked
+    def derives_to_lambda(self, non_terminal, checked=None):
+        if checked is None:
+            checked = []
+        for rule in self.rules[non_terminal]:
+            if rule in checked:
+                continue
+            if rule.items == ['']:
+                return True
+            if len(self.alphabet.intersection(rule.items)) > 0:
+                continue
+            all_derive_lambda = True
+            for symbol in rule.items:
+                checked.append(rule)
+                all_derive_lambda = self.derives_to_lambda(symbol, checked)
+                checked.pop()
+                if not all_derive_lambda:
+                    break
+            if all_derive_lambda:
+                return True
+
+        return False
+
 
 # print things in the example format from lga-cfg-code
 if __name__ == '__main__':
@@ -94,3 +124,5 @@ if __name__ == '__main__':
     print(cfg.get_rules_string())
     print()
     print('Grammar Start Symbol or Goal:', cfg.start_symbol)
+    print(cfg.derives_to_lambda('C'))
+    print(cfg.derives_to_lambda('D'))
