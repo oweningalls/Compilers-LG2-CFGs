@@ -43,6 +43,18 @@ class CFG:
         where the list inside Rule() is that Rule's items
         """
         self.rules: Dict[str, List[Rule]] = defaultdict(list)
+        """
+        ll1_table is a dictionary of non-terminals to dictionaries from letters to rules
+        it might look something like the following:
+        {
+            NonTerminal1: {a: Rule1, b: Rule2, ...},
+            NonTerminal2: {a: Rule3, b: Rule4, ...},
+            ...
+        }
+        note that each "rule" is just the RHS of a production rule,
+        so each production rule is uniquely identified by the non-terminal and the "rule"
+        """
+        self.ll1_table: Dict[str, Dict[str, Rule]] = defaultdict(lambda: {})
         self.alphabet: Set[str] = set()
         self.alphabet_dollar: Set[str] = set()
         with open(grammar_file, 'r') as grammar:
@@ -204,6 +216,16 @@ class CFG:
                     return False
         return True
 
+    def generate_ll1_table(self):
+        if not self.check_ll1():
+            print('not a valid ll1 grammar')
+            return
+        for non_terminal, rules in self.rules.items():
+            for rule in rules:
+                prediction = self.predict_set(non_terminal, rule)
+                for symbol in prediction:
+                    self.ll1_table[non_terminal][symbol] = rule
+
 
 # print things in the example format from lga-cfg-code
 if __name__ == '__main__':
@@ -238,3 +260,6 @@ if __name__ == '__main__':
             print(non_terminal, 'rule:', rule, cfg.predict_set(non_terminal, rule))
 
     print(cfg.check_ll1())
+    cfg.generate_ll1_table()
+    for non_terminal in cfg.ll1_table:
+        print(f"{non_terminal}: {str(cfg.ll1_table[non_terminal])}")
