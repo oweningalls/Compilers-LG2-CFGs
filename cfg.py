@@ -1,6 +1,8 @@
 from collections import defaultdict
 from copy import copy
-from typing import Any, Dict, List, Set, Tuple
+from ctypes import Union
+from io import TextIOWrapper
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 
 # just a wrapper class for a list of strings
@@ -43,18 +45,6 @@ class CFG:
         where the list inside Rule() is that Rule's items
         """
         self.rules: Dict[str, List[Rule]] = defaultdict(list)
-        """
-        ll1_table is a dictionary of non-terminals to dictionaries from letters to rules
-        it might look something like the following:
-        {
-            NonTerminal1: {a: Rule1, b: Rule2, ...},
-            NonTerminal2: {a: Rule3, b: Rule4, ...},
-            ...
-        }
-        note that each "rule" is just the RHS of a production rule,
-        so each production rule is uniquely identified by the non-terminal and the "rule"
-        """
-        self.ll1_table: Dict[str, Dict[str, Rule]] = defaultdict(lambda: {})
         self.alphabet: Set[str] = set()
         self.alphabet_dollar: Set[str] = set()
         with open(grammar_file, 'r') as grammar:
@@ -216,16 +206,92 @@ class CFG:
                     return False
         return True
 
-    def generate_ll1_table(self):
+    def generate_ll1_table(self) -> Optional[Dict[str, Dict[str, Rule]]]:
+        """
+        ll1_table is a dictionary of non-terminals to dictionaries from letters to rules
+        it might look something like the following:
+        {
+            NonTerminal1: {a: Rule1, b: Rule2, ...},
+            NonTerminal2: {a: Rule3, b: Rule4, ...},
+            ...
+        }
+        note that each "rule" is just the RHS of a production rule,
+        so each production rule is uniquely identified by the non-terminal and the "rule"
+        """
+        ll1_table: Dict[str, Dict[str, Rule]] = defaultdict(lambda: {})
+
         if not self.check_ll1():
             print('not a valid ll1 grammar')
-            return
+            return None
+        
         for non_terminal, rules in self.rules.items():
             for rule in rules:
                 prediction = self.predict_set(non_terminal, rule)
                 for symbol in prediction:
-                    self.ll1_table[non_terminal][symbol] = rule
+                    ll1_table[non_terminal][symbol] = rule
+        
+        return ll1_table
 
+class Token:
+    def __init__(self, type: str, value: str = None):
+        self.type = type
+        self.value = value
+    
+    def __repr__(self) -> str:
+        s = self.type
+        if self.value != None: s+=f"({self.value})"
+        return s
+
+class Node:
+    def __init__(self, type: str):
+        self.type = type
+        self.children = [] # List[Union[Node,Leaf]]
+    
+    def print(self, tabs=0) -> str:
+        print('| '*tabs + self.type)
+        for child in self.children:
+            child.print(tabs + 1)
+
+class Leaf:
+    def __init__(self, token: str):
+        self.token = token
+    
+    def print(self, tabs=0) -> str:
+        print('| '*tabs + str(self.token))
+        
+
+def parse(cfg: CFG, table: Dict[str, Dict[str, Rule]], stream: TextIOWrapper) -> Optional[Node]:
+    cur_token: Token = None
+    def next_token():
+        nonlocal cur_token
+        try:
+            cur_token = Token(*stream.readline().strip().split())
+        except:
+            pass
+    next_token()
+    root = Node('root')
+    stack: List[Tuple[str, Union[Node, Leaf]]] = [('S', root)]
+    while len(stack):
+        symbol, node = stack.pop()
+
+        if isinstance(node, Leaf):
+            if node.token != cur_token.type:
+                return None
+            node.value = cur_token.value
+            next_token()
+        elif cur_token.type in table[symbol]:
+            rule = table[symbol][cur_token.type]
+            for part in rule.items[::-1]:
+                if part in cfg.alphabet_dollar:
+                    new_node = Leaf(part)
+                else:
+                    new_node = Node(part)
+                node.children.insert(0, new_node) # slow, bad.
+                stack.append((part, new_node))
+        else:
+            return None
+    
+    return root
 
 # print things in the example format from lga-cfg-code
 if __name__ == '__main__':
@@ -259,7 +325,16 @@ if __name__ == '__main__':
         for rule in rules:
             print(non_terminal, 'rule:', rule, cfg.predict_set(non_terminal, rule))
 
-    print(cfg.check_ll1())
-    cfg.generate_ll1_table()
-    for non_terminal in cfg.ll1_table:
-        print(f"{non_terminal}: {str(cfg.ll1_table[non_terminal])}")
+    print('\nBuilding table:')
+    is_ll1 = cfg.check_ll1()
+    print('Is LL(1):', is_ll1)
+    if not is_ll1: exit()
+    ll1_table = cfg.generate_ll1_table()
+    for non_terminal in ll1_table:
+        print(f"{non_terminal}: {str(ll1_table[non_terminal])}")
+    
+    print('\nParse tree')
+    tree = parse(cfg, ll1_table, open('tokenstream.txt','r'))
+    tree.print()
+    
+
