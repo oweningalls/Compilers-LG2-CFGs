@@ -20,6 +20,12 @@ class Rule:
             output += item + ' '
         return output[:-1]
 
+    def __repr__(self):
+        return str(self)
+
+    def __eq__(self, other):
+        return self.items == other.items
+
 
 class CFG:
     # pass in path to grammar definition file
@@ -31,7 +37,7 @@ class CFG:
 
         rules would be:
         {
-            S: [Rule(['A', '$']]
+            S: [Rule(['A', '$'])]
             A: [Rule(['a']), Rule([''])
         }
         where the list inside Rule() is that Rule's items
@@ -66,7 +72,7 @@ class CFG:
             self.alphabet.remove('')
         if '$' in self.alphabet:
             self.alphabet.remove('$')
-        
+
         self.alphabet_dollar = self.alphabet.union(['$'])
 
     # returns a list of the non-terminals
@@ -75,9 +81,7 @@ class CFG:
 
     # returns a list of the terminals and non-terminals (and $)
     def get_grammar_symbols(self):
-        symbols = self.alphabet.union(self.rules.keys())
-        symbols.add('$')
-        return symbols
+        return self.alphabet_dollar.union(self.rules.keys())
 
     # if self.rules is { S -> [Rule(['a', '$']), Rule([''])] }
     # this returns
@@ -96,6 +100,10 @@ class CFG:
     # pass in the name of a non_terminal
     # don't pass anything for checked
     def derives_to_lambda(self, non_terminal: str, checked=None):
+        if non_terminal == '':
+            return True
+        if non_terminal in self.alphabet:
+            return False
         if checked is None:
             checked = []
         for rule in self.rules[non_terminal]:
@@ -119,11 +127,13 @@ class CFG:
 
     def first_set(self, seq: List[str], T: Set[str] = set()) -> Tuple[str, Set[str]]:
         first, *rest = seq
+        if first == '':
+            return set(), T
         T = copy(T)
 
         if first in self.alphabet_dollar:
-            return { first }, T
-        
+            return {first}, T
+
         result_set = set()
 
         if first not in T:
@@ -131,20 +141,19 @@ class CFG:
             for rule in self.rules[first]:
                 sub_result, _ = self.first_set(rule.items, T)
                 result_set.update(sub_result)
-        
+
         if self.derives_to_lambda(first) and len(rest) > 0:
             sub_result, _ = self.first_set(rest, T)
             result_set.update(sub_result)
-        
-        return result_set, T
 
+        return result_set, T
 
     def follow_set(self, non_terminal: str, T: Set[str] = set()) -> Tuple[Set[str], Set[str]]:
         T = copy(T)
 
         if non_terminal in T:
             return set(), T
-        
+
         T.add(non_terminal)
         result_set = set()
 
@@ -153,10 +162,10 @@ class CFG:
                 if non_terminal not in rule.items:
                     continue
 
-                for i in range(1, len(rule.items)+1):
-                    if rule.items[i-1] != non_terminal:
+                for i in range(1, len(rule.items) + 1):
+                    if rule.items[i - 1] != non_terminal:
                         continue
-                    
+
                     suffix = rule.items[i:]
 
                     if i < len(rule.items):
@@ -164,15 +173,36 @@ class CFG:
                         result_set.update(sub_result)
 
                     if i == len(rule.items) or (
-                        len(self.alphabet_dollar.intersection(suffix)) == 0 and
-                        all(self.derives_to_lambda(c) for c in suffix)
+                            len(self.alphabet_dollar.intersection(suffix)) == 0 and
+                            all(self.derives_to_lambda(c) for c in suffix)
                     ):
                         sub_result, _ = self.follow_set(rule_name, T)
                         result_set.update(sub_result)
-        
+
         return result_set, T
 
+    def predict_set(self, non_terminal: str, rule: Rule) -> set[str]:
+        derives_to_lambda = True
+        for element in rule.items:
+            if not self.derives_to_lambda(element):
+                derives_to_lambda = False
+                break
 
+        output = self.first_set(rule.items)[0]
+        if derives_to_lambda:
+            output = output.union(self.follow_set(non_terminal)[0])
+        return output
+
+    def check_ll1(self):
+        for non_terminal, rules in self.rules.items():
+            collective_predict_set = set()
+            for rule in rules:
+                current_predict_set = self.predict_set(non_terminal, rule)
+                current_collective_size = len(collective_predict_set)
+                collective_predict_set = collective_predict_set.union(current_predict_set)
+                if len(collective_predict_set) != current_collective_size + len(current_predict_set):
+                    return False
+        return True
 
 
 # print things in the example format from lga-cfg-code
@@ -195,6 +225,16 @@ if __name__ == '__main__':
     print(cfg.first_set('C'))
     print('Follow set tests:')
     print(cfg.follow_set('S'))
+    print(cfg.follow_set('A'))
+    print(cfg.follow_set('B'))
     print(cfg.follow_set('C'))
     print(cfg.follow_set('D'))
     print(cfg.follow_set('E'))
+
+    cfg = CFG('test2.cfg')
+    print('\nPredict sets')
+    for non_terminal, rules in cfg.rules.items():
+        for rule in rules:
+            print(non_terminal, 'rule:', rule, cfg.predict_set(non_terminal, rule))
+
+    print(cfg.check_ll1())
